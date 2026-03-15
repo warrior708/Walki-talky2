@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>RadioLink</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg:      #0a0a0a;
+    --surface: #111111;
+    --border:  #1e1e1e;
+    --accent:  #00ff88;
+    --warn:    #ff4444;
+    --saved:   #ffaa00;
+    --text:    #c8c8c8;
+    --dim:     #555;
+    --mono:    'Share Tech Mono', monospace;
+    --sans:    'Rajdhani', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body {
+    width:100%; height:100%; overflow:hidden;
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans); touch-action:none;
+  }
+
+  /* scanlines */
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:100;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,136,.015) 2px,rgba(0,255,136,.015) 4px);
+  }
+
+  #app {
+    display:flex; flex-direction:column;
+    height:100%; padding:0 20px 20px;
+    max-width:420px; margin:0 auto;
+  }
+
+  /* ─── Header ─── */
+  header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 0 12px; border-bottom:1px solid var(--border);
+  }
+  .logo { font-family:var(--mono); font-size:13px; letter-spacing:.12em; color:var(--accent); }
+  .logo span { color:var(--dim); }
+  .header-right { display:flex; align-items:center; gap:10px; }
+
+  .saved-pill {
+    font-family:var(--mono); font-size:9px; letter-spacing:.1em;
+    color:var(--saved); border:1px solid rgba(255,170,0,.25);
+    background:rgba(255,170,0,.07); border-radius:3px; padding:3px 7px;
+    display:none;
+  }
+  .saved-pill.on { display:block; }
+
+  .signal-bars { display:flex; gap:3px; align-items:flex-end; height:16px; }
+  .signal-bars .bar { width:4px; background:var(--border); border-radius:1px; transition:background .3s; }
+  .signal-bars .bar:nth-child(1){height:5px}  .signal-bars .bar:nth-child(2){height:9px}
+  .signal-bars .bar:nth-child(3){height:13px} .signal-bars .bar:nth-child(4){height:16px}
+  .signal-bars.live .bar { background:var(--accent); }
+  .signal-bars.live .bar:nth-child(4) { background:var(--border); }
+
+  /* ─── Saved banner ─── */
+  #saved-banner {
+    margin-top:12px; padding:10px 14px;
+    background:rgba(255,170,0,.06); border:1px solid rgba(255,170,0,.18);
+    border-radius:6px; display:none; align-items:center; gap:10px;
+  }
+  #saved-banner.on { display:flex; }
+  .sb-left { flex:1; }
+  .sb-title { font-family:var(--mono); font-size:10px; color:var(--saved); letter-spacing:.1em; }
+  .sb-sub   { font-family:var(--mono); font-size:9px;  color:var(--dim);   letter-spacing:.06em; margin-top:3px; }
+  .sb-btns  { display:flex; gap:6px; }
+  .sbtn {
+    font-family:var(--mono); font-size:10px; letter-spacing:.07em;
+    padding:6px 10px; border-radius:3px; border:none; cursor:pointer; transition:all .2s;
+  }
+  .sbtn.go  { background:rgba(255,170,0,.15); color:var(--saved); border:1px solid rgba(255,170,0,.3); }
+  .sbtn.go:hover  { background:rgba(255,170,0,.28); }
+  .sbtn.del { background:transparent; color:var(--dim); border:1px solid var(--border); }
+  .sbtn.del:hover { color:var(--warn); border-color:rgba(255,68,68,.3); }
+
+  /* ─── Connection panel ─── */
+  #conn-panel {
+    margin-top:12px; background:var(--surface);
+    border:1px solid var(--border); border-radius:6px;
+    overflow:hidden; transition:all .3s;
+  }
+  .panel-tabs { display:flex; }
+  .tab {
+    flex:1; padding:10px; font-family:var(--mono); font-size:11px;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--dim);
+    background:transparent; border:none; cursor:pointer;
+    border-bottom:2px solid transparent; transition:all .2s;
+  }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .panel-body { padding:14px; }
+
+  .code-box {
+    font-family:var(--mono); font-size:10px; color:var(--accent);
+    background:rgba(0,255,136,.05); border:1px solid rgba(0,255,136,.15);
+    border-radius:4px; padding:10px 12px; word-break:break-all; line-height:1.6;
+    min-height:56px; display:flex; align-items:center; cursor:pointer;
+    position:relative; overflow:hidden;
+  }
+  .code-box::after { content:'TAP TO COPY'; position:absolute; right:10px; bottom:6px; font-size:9px; color:var(--dim); letter-spacing:.08em; }
+  .code-box.empty  { color:var(--dim); font-size:10px; }
+
+  /* save toggle */
+  .save-row {
+    display:flex; align-items:center; gap:8px; margin-top:9px;
+    font-family:var(--mono); font-size:10px; color:var(--dim); cursor:pointer;
+  }
+  .toggle {
+    width:28px; height:16px; border-radius:8px; background:var(--border);
+    position:relative; transition:background .2s; flex-shrink:0;
+  }
+  .toggle::after {
+    content:''; position:absolute; top:2px; left:2px;
+    width:12px; height:12px; border-radius:50%; background:var(--dim); transition:all .2s;
+  }
+  .toggle.on { background:rgba(0,255,136,.3); }
+  .toggle.on::after { left:14px; background:var(--accent); }
+
+  textarea {
+    width:100%; font-family:var(--mono); font-size:11px; color:var(--text);
+    background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:4px;
+    padding:10px 12px; resize:none; outline:none; height:72px; line-height:1.6;
+    caret-color:var(--accent); transition:border-color .2s;
+  }
+  textarea:focus { border-color:rgba(0,255,136,.3); }
+
+  .btn-row { display:flex; gap:8px; margin-top:10px; }
+  .btn {
+    flex:1; padding:10px; font-family:var(--mono); font-size:11px;
+    letter-spacing:.08em; text-transform:uppercase; border:1px solid var(--border);
+    border-radius:4px; background:transparent; color:var(--dim); cursor:pointer; transition:all .2s;
+  }
+  .btn:active { transform:scale(.97); }
+  .btn.p { background:rgba(0,255,136,.08); border-color:rgba(0,255,136,.3); color:var(--accent); }
+  .btn.p:hover { background:rgba(0,255,136,.14); }
+
+  /* ─── Status strip ─── */
+  #status-strip {
+    display:flex; align-items:center; gap:8px; margin-top:10px;
+    font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--dim); min-height:20px;
+  }
+  .dot { width:6px; height:6px; border-radius:50%; background:var(--dim); transition:all .3s; flex-shrink:0; }
+  .dot.live { background:var(--accent); box-shadow:0 0 6px var(--accent); }
+  .dot.tx   { background:var(--warn);   box-shadow:0 0 6px var(--warn); animation:blink .5s infinite; }
+  @keyframes blink{50%{opacity:.3}}
+
+  /* ─── PTT Stage ─── */
+  #ptt-stage {
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:18px;
+  }
+
+  .freq-display { font-family:var(--mono); font-size:26px; letter-spacing:.06em; text-align:center; line-height:1; }
+  .freq-display .fmain { color:var(--text); }
+  .freq-display .funit { font-size:12px; letter-spacing:.15em; color:var(--dim); }
+
+  .ptt-wrap { position:relative; width:200px; height:200px; display:flex; align-items:center; justify-content:center; }
+
+  .ring {
+    position:absolute; border-radius:50%; border:1px solid var(--accent);
+    opacity:0; width:100%; height:100%; pointer-events:none;
+  }
+  #ptt.tx ~ .ring               { animation:ripple 1.2s infinite; }
+  #ptt.tx ~ .ring:nth-child(2)  { animation-delay:.4s; }
+  #ptt.tx ~ .ring:nth-child(3)  { animation-delay:.8s; }
+  @keyframes ripple{0%{transform:scale(1);opacity:.5}100%{transform:scale(1.7);opacity:0}}
+
+  #ptt {
+    width:170px; height:170px; border-radius:50%; border:none; cursor:pointer;
+    position:relative; z-index:1; user-select:none; -webkit-user-select:none;
+    transition:transform .08s;
+    background:
+      radial-gradient(circle at 38% 32%,rgba(255,255,255,.06) 0%,transparent 55%),
+      radial-gradient(circle at 50% 50%,#1e1e1e 0%,#111 60%,#0d0d0d 100%);
+    box-shadow:0 0 0 2px #1e1e1e,0 0 0 4px #141414,0 4px 24px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.04);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+  }
+  #ptt svg { width:36px; height:36px; }
+  #ptt svg path { fill:var(--dim); transition:fill .15s; }
+  #ptt .lbl { font-family:var(--mono); font-size:10px; letter-spacing:.2em; color:var(--dim); transition:color .15s; }
+
+  #ptt.tx {
+    transform:scale(.96);
+    background:
+      radial-gradient(circle at 38% 32%,rgba(0,255,136,.1) 0%,transparent 55%),
+      radial-gradient(circle at 50% 50%,#162620 0%,#0e1c18 60%,#0a1612 100%);
+    box-shadow:0 0 0 2px rgba(0,255,136,.2),0 0 0 4px rgba(0,255,136,.08),0 4px 32px rgba(0,255,136,.2),0 0 60px rgba(0,255,136,.08),inset 0 1px 0 rgba(0,255,136,.08);
+  }
+  #ptt.tx svg path { fill:var(--accent); }
+  #ptt.tx .lbl     { color:var(--accent); }
+  #ptt:disabled    { opacity:.3; cursor:not-allowed; }
+
+  /* VU meter */
+  #vu { display:flex; gap:3px; align-items:flex-end; height:24px; opacity:0; transition:opacity .3s; }
+  #vu.on { opacity:1; }
+  #vu .b { width:5px; border-radius:2px; background:var(--accent); height:4px; transition:height .05s; }
+
+  /* BG notice */
+  #bg-bar {
+    font-family:var(--mono); font-size:9px; letter-spacing:.08em;
+    color:var(--dim); display:none; align-items:center; justify-content:center; gap:5px;
+  }
+  #bg-bar.on { display:flex; }
+  #bg-bar .ds { width:5px; height:5px; border-radius:50%; background:var(--accent); flex-shrink:0; }
+
+  footer { text-align:center; font-family:var(--mono); font-size:9px; letter-spacing:.12em; color:var(--dim); padding-bottom:2px; }
+
+  #toast {
+    position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--text); font-family:var(--mono); font-size:11px;
+    letter-spacing:.06em; padding:10px 20px; border-radius:4px;
+    opacity:0; pointer-events:none; transition:opacity .3s; white-space:nowrap; z-index:200;
+  }
+  #toast.on { opacity:1; }
+
+  /* collapsed panel */
+  #conn-panel.closed .panel-tabs,
+  #conn-panel.closed .panel-body { display:none; }
+  #conn-panel.closed { background:transparent; border-color:transparent; }
+  #conn-meta { display:none; margin-top:6px; }
+  .cbtn { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--dim); background:none; border:none; cursor:pointer; padding:4px 0; transition:color .2s; }
+  .cbtn:hover { color:var(--text); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="logo">RADIO<span>LINK</span></div>
+    <div class="header-right">
+      <div class="saved-pill" id="saved-pill">● SAVED</div>
+      <div class="signal-bars" id="sigbars">
+        <div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div><div class="bar"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Saved session banner -->
+  <div id="saved-banner">
+    <div class="sb-left">
+      <div class="sb-title">SAVED SESSION FOUND</div>
+      <div class="sb-sub" id="sb-sub">LOADING…</div>
+    </div>
+    <div class="sb-btns">
+      <button class="sbtn go"  onclick="reconnectSaved()">RECONNECT</button>
+      <button class="sbtn del" onclick="clearSaved()">CLEAR</button>
+    </div>
+  </div>
+
+  <!-- Connection panel -->
+  <div id="conn-panel">
+    <div class="panel-tabs">
+      <button class="tab active" id="tab-c" onclick="switchTab('c')">CREATE</button>
+      <button class="tab"        id="tab-j" onclick="switchTab('j')">JOIN</button>
+    </div>
+
+    <!-- CREATE -->
+    <div class="panel-body" id="panel-c">
+      <div class="code-box empty" id="offer-box" onclick="copyCode()">TAP "GENERATE" TO CREATE A ROOM CODE</div>
+      <div class="save-row" onclick="toggleSaveC()">
+        <div class="toggle on" id="tog-c"></div>
+        <span>SAVE CODE FOR NEXT TIME</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn p" onclick="createRoom()">GENERATE</button>
+        <button class="btn"   onclick="copyCode()">COPY CODE</button>
+      </div>
+    </div>
+
+    <!-- JOIN -->
+    <div class="panel-body" id="panel-j" style="display:none">
+      <textarea id="join-input" placeholder="PASTE ROOM CODE HERE…"></textarea>
+      <div class="save-row" onclick="toggleSaveJ()">
+        <div class="toggle on" id="tog-j"></div>
+        <span>SAVE CODE FOR NEXT TIME</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn p" onclick="joinRoom()">CONNECT</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="conn-meta">
+    <button class="cbtn" onclick="togglePanel()">▲ HIDE PANEL</button>
+  </div>
+
+  <!-- Status -->
+  <div id="status-strip">
+    <div class="dot" id="sdot"></div>
+    <span id="stxt">DISCONNECTED — CREATE OR JOIN A ROOM</span>
+  </div>
+
+  <!-- PTT stage -->
+  <div id="ptt-stage">
+    <div class="freq-display">
+      <div class="fmain" id="fval">462.5625</div>
+      <div class="funit">MHz · FRS CH 1</div>
+    </div>
+
+    <div class="ptt-wrap">
+      <button id="ptt" disabled>
+        <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M18 2C15.24 2 13 4.24 13 7v11c0 2.76 2.24 5 5 5s5-2.24 5-5V7c0-2.76-2.24-5-5-5z"/>
+          <path d="M7 17c0 6.08 4.48 11.1 10.33 11.9V32h-3.33a1 1 0 000 2h8a1 1 0 000-2h-3.33v-3.1C24.52 28.1 29 23.08 29 17h-2c0 4.96-4.04 9-9 9s-9-4.04-9-9H7z"/>
+        </svg>
+        <span class="lbl">PUSH TO TALK</span>
+      </button>
+      <div class="ring"></div>
+      <div class="ring"></div>
+      <div class="ring"></div>
+    </div>
+
+    <div id="vu">
+      <div class="b"></div><div class="b"></div><div class="b"></div><div class="b"></div>
+      <div class="b"></div><div class="b"></div><div class="b"></div><div class="b"></div>
+      <div class="b"></div><div class="b"></div><div class="b"></div><div class="b"></div>
+    </div>
+
+    <div id="bg-bar">
+      <div class="ds"></div>
+      <span id="bg-txt">AUDIO ACTIVE IN BACKGROUND</span>
+    </div>
+  </div>
+
+  <footer>RADIOLINK v2.0 · P2P · WEBRTC · BG AUDIO</footer>
+</div>
+
+<div id="toast"></div>
+<!-- Remote audio — lives outside app div, never removed from DOM -->
+<audio id="remote-audio" autoplay playsinline style="display:none"></audio>
+
+<script>
+// ════════════════════════════════════════════════
+//  STORAGE
+// ════════════════════════════════════════════════
+const SK = 'rl_session_v2';
+
+function saveSession(role, offerCode) {
+  try {
+    localStorage.setItem(SK, JSON.stringify({ role, offerCode, ts: Date.now() }));
+    document.getElementById('saved-pill').classList.add('on');
+  } catch(e) {}
+}
+function loadSession() {
+  try { return JSON.parse(localStorage.getItem(SK)); } catch(e) { return null; }
+}
+function clearSaved() {
+  localStorage.removeItem(SK);
+  document.getElementById('saved-banner').classList.remove('on');
+  document.getElementById('saved-pill').classList.remove('on');
+  toast('SAVED SESSION CLEARED');
+}
+function ageStr(ts) {
+  const s = Math.floor((Date.now()-ts)/1000);
+  if (s < 60)    return 'JUST NOW';
+  if (s < 3600)  return Math.floor(s/60)+' MIN AGO';
+  if (s < 86400) return Math.floor(s/3600)+' HR AGO';
+  return Math.floor(s/86400)+' DAYS AGO';
+}
+
+// Boot: check for saved session
+(function() {
+  const s = loadSession();
+  if (!s) return;
+  document.getElementById('saved-banner').classList.add('on');
+  document.getElementById('saved-pill').classList.add('on');
+  document.getElementById('sb-sub').textContent =
+    (s.role === 'creator' ? 'CREATOR MODE · ' : 'JOINER MODE · ') + ageStr(s.ts);
+})();
+
+// ════════════════════════════════════════════════
+//  SAVE TOGGLES
+// ════════════════════════════════════════════════
+let saveC = true, saveJ = true;
+function toggleSaveC() { saveC=!saveC; document.getElementById('tog-c').classList.toggle('on',saveC); }
+function toggleSaveJ() { saveJ=!saveJ; document.getElementById('tog-j').classList.toggle('on',saveJ); }
+
+// ════════════════════════════════════════════════
+//  RECONNECT
+// ════════════════════════════════════════════════
+function reconnectSaved() {
+  const s = loadSession();
+  if (!s) { toast('NO SAVED SESSION FOUND'); return; }
+  document.getElementById('saved-banner').classList.remove('on');
+  if (s.role === 'creator') {
+    // Creator: auto-generate a fresh offer (ICE can't be reused across sessions)
+    switchTab('c');
+    toast('GENERATING FRESH CODE…');
+    setTimeout(() => createRoom(), 400);
+  } else {
+    // Joiner: pre-fill saved offer code and auto-connect
+    switchTab('j');
+    document.getElementById('join-input').value = s.offerCode;
+    toast('RECONNECTING FROM SAVED CODE…');
+    setTimeout(() => joinRoom(), 500);
+  }
+}
+
+// ════════════════════════════════════════════════
+//  AUDIO CTX + BEEPS
+// ════════════════════════════════════════════════
+let actx = null;
+function getACtx() {
+  if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function beep(f,d,t='sine',v=0.18) {
+  try {
+    const c=getACtx(), o=c.createOscillator(), g=c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.type=t; o.frequency.setValueAtTime(f,c.currentTime);
+    g.gain.setValueAtTime(0,c.currentTime);
+    g.gain.linearRampToValueAtTime(v,c.currentTime+.01);
+    g.gain.linearRampToValueAtTime(0,c.currentTime+d);
+    o.start(); o.stop(c.currentTime+d+.02);
+  } catch(e){}
+}
+const bStart = () => { beep(880,.08,'square',.14); setTimeout(()=>beep(1320,.06,'square',.1),60); };
+const bStop  = () => { beep(660,.06,'square',.1);  setTimeout(()=>beep(440,.1,'square',.12),50);  };
+
+// ════════════════════════════════════════════════
+//  BACKGROUND AUDIO — keep alive
+// ════════════════════════════════════════════════
+let silentOsc = null;
+let wakeLock  = null;
+
+function keepAlive() {
+  // Silent oscillator keeps AudioContext running in background
+  try {
+    const c = getACtx();
+    if (silentOsc) { try{silentOsc.stop();}catch(e){} }
+    const o = c.createOscillator();
+    const g = c.createGain(); g.gain.value = 0;
+    o.connect(g); g.connect(c.destination); o.start();
+    silentOsc = o;
+  } catch(e){}
+  tryWakeLock();
+}
+
+async function tryWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock=null; });
+    }
+  } catch(e){}
+}
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    if (actx && actx.state==='suspended') actx.resume();
+    if (connected && !wakeLock) tryWakeLock();
+    document.getElementById('bg-bar').classList.remove('on');
+    // Resume remote audio if it paused
+    const ra = document.getElementById('remote-audio');
+    if (ra.srcObject && ra.paused) ra.play().catch(()=>{});
+  } else {
+    if (connected) document.getElementById('bg-bar').classList.add('on');
+  }
+});
+
+// ════════════════════════════════════════════════
+//  WEBRTC
+// ════════════════════════════════════════════════
+let pc = null, localStream = null, audioTrack = null;
+let connected = false, txing = false;
+let vuTick = null, analyser = null;
+let pendingOffer = null; // current offer code for saving
+
+const STUN = [
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'stun:stun.cloudflare.com:3478'},
+];
+
+function mkPC() {
+  const p = new RTCPeerConnection({iceServers:STUN});
+  p.oniceconnectionstatechange = () => {
+    const s = p.iceConnectionState;
+    if (s==='connected'||s==='completed') onConn();
+    if (s==='disconnected'||s==='failed'||s==='closed') onDisc();
+  };
+  p.ontrack = e => {
+    const el = document.getElementById('remote-audio');
+    el.srcObject = e.streams[0];
+    // Force play — works even in background on Android WebView
+    el.play().catch(()=>{});
+  };
+  return p;
+}
+
+function waitIce(p) {
+  return new Promise(res => {
+    if (p.iceGatheringState==='complete') { res(p.localDescription); return; }
+    p.onicegatheringstatechange = () => { if(p.iceGatheringState==='complete') res(p.localDescription); };
+    setTimeout(()=>res(p.localDescription), 7000);
+  });
+}
+
+async function getMic() {
+  if (localStream) return localStream;
+  localStream = await navigator.mediaDevices.getUserMedia({
+    audio:{ echoCancellation:true, noiseSuppression:true, sampleRate:16000 },
+    video:false
+  });
+  audioTrack = localStream.getAudioTracks()[0];
+  audioTrack.enabled = false;
+  return localStream;
+}
+
+// ── CREATE ──
+async function createRoom() {
+  setStatus('GENERATING CODE…', false);
+  try {
+    const s = await getMic();
+    if (pc) { pc.close(); pc=null; }
+    pc = mkPC();
+    s.getTracks().forEach(t => pc.addTrack(t,s));
+    const offer = await pc.createOffer({offerToReceiveAudio:true});
+    await pc.setLocalDescription(offer);
+    const sdp = await waitIce(pc);
+    const enc = btoa(JSON.stringify({type:sdp.type, sdp:sdp.sdp}));
+    pendingOffer = enc;
+    document.getElementById('offer-box').textContent = enc;
+    document.getElementById('offer-box').classList.remove('empty');
+    setStatus('SHARE CODE · AWAITING PEER ANSWER…', false);
+    pollAnswer();
+    toast('CODE READY — SHARE WITH YOUR PEER');
+  } catch(e) {
+    setStatus('MIC PERMISSION DENIED', false);
+    toast('ALLOW MICROPHONE ACCESS TO CONTINUE');
+    console.error(e);
+  }
+}
+
+let pollT = null;
+function pollAnswer() {
+  clearInterval(pollT);
+  pollT = setInterval(async () => {
+    const raw = document.getElementById('join-input').value.trim();
+    if (!raw || !pc) return;
+    try {
+      const d = JSON.parse(atob(raw));
+      if (d.type==='answer') {
+        clearInterval(pollT);
+        await pc.setRemoteDescription(new RTCSessionDescription(d));
+        setStatus('HANDSHAKING…', false);
+        if (saveC && pendingOffer) saveSession('creator', pendingOffer);
+        document.getElementById('join-input').value = '';
+      }
+    } catch(e){}
+  }, 700);
+}
+
+// ── JOIN ──
+async function joinRoom() {
+  const raw = document.getElementById('join-input').value.trim();
+  if (!raw) { toast('PASTE A ROOM CODE FIRST'); return; }
+  let offer;
+  try { offer = JSON.parse(atob(raw)); } catch(e) { toast('INVALID CODE — TRY AGAIN'); return; }
+  if (offer.type!=='offer') { toast('PASTE THE OFFER CODE (NOT ANSWER)'); return; }
+
+  setStatus('CONNECTING…', false);
+  try {
+    const s = await getMic();
+    if (pc) { pc.close(); pc=null; }
+    pc = mkPC();
+    s.getTracks().forEach(t => pc.addTrack(t,s));
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    const sdp = await waitIce(pc);
+    const enc = btoa(JSON.stringify({type:sdp.type, sdp:sdp.sdp}));
+
+    switchTab('c');
+    document.getElementById('offer-box').textContent = enc;
+    document.getElementById('offer-box').classList.remove('empty');
+    toast('COPY ANSWER CODE & SEND BACK TO CREATOR');
+    setStatus('ANSWER READY — SEND CODE BACK', false);
+
+    // Save the offer code so joiner can reconnect next time
+    if (saveJ) saveSession('joiner', raw);
+  } catch(e) {
+    setStatus('CONNECTION FAILED', false);
+    toast('FAILED — CHECK CODE & RETRY');
+    console.error(e);
+  }
+}
+
+// ── Connection events ──
+function onConn() {
+  if (connected) return;
+  connected = true;
+  clearInterval(pollT);
+  setStatus('CONNECTED · LISTENING', true);
+  document.getElementById('ptt').disabled = false;
+  document.getElementById('sigbars').classList.add('live');
+  document.getElementById('conn-meta').style.display = 'block';
+  keepAlive();
+  beep(440,.1); setTimeout(()=>beep(550,.1),100); setTimeout(()=>beep(660,.15),200);
+  toast('● CONNECTED — HOLD BUTTON TO TRANSMIT');
+}
+
+function onDisc() {
+  if (!connected) return;
+  connected = false;
+  setStatus('PEER DISCONNECTED', false);
+  document.getElementById('ptt').disabled = true;
+  document.getElementById('sigbars').classList.remove('live');
+  document.getElementById('conn-meta').style.display = 'none';
+  document.getElementById('bg-bar').classList.remove('on');
+  if (silentOsc) { try{silentOsc.stop();}catch(e){} silentOsc=null; }
+  if (wakeLock)  { wakeLock.release().catch(()=>{}); wakeLock=null; }
+  stopVU();
+  beep(440,.08,'square',.1); setTimeout(()=>beep(300,.15,'square',.1),80);
+}
+
+// ════════════════════════════════════════════════
+//  PTT
+// ════════════════════════════════════════════════
+const ptt = document.getElementById('ptt');
+
+function txOn() {
+  if (!connected || txing) return;
+  getACtx();
+  txing = true;
+  if (audioTrack) audioTrack.enabled = true;
+  ptt.classList.add('tx');
+  setStatus('TRANSMITTING…', true);
+  bStart();
+  startVU();
+}
+function txOff() {
+  if (!txing) return;
+  txing = false;
+  if (audioTrack) audioTrack.enabled = false;
+  ptt.classList.remove('tx');
+  setStatus('CONNECTED · LISTENING', true);
+  bStop();
+  stopVU();
+}
+
+ptt.addEventListener('touchstart', e=>{ e.preventDefault(); txOn();  }, {passive:false});
+ptt.addEventListener('touchend',   e=>{ e.preventDefault(); txOff(); }, {passive:false});
+ptt.addEventListener('touchcancel',e=>{ e.preventDefault(); txOff(); }, {passive:false});
+ptt.addEventListener('mousedown',  e=>{ e.preventDefault(); txOn();  });
+ptt.addEventListener('mouseup',    ()=> txOff());
+ptt.addEventListener('mouseleave', ()=>{ if(txing) txOff(); });
+document.addEventListener('keydown', e=>{ if(e.code==='Space'&&!e.repeat) txOn(); });
+document.addEventListener('keyup',   e=>{ if(e.code==='Space') txOff(); });
+
+// ════════════════════════════════════════════════
+//  VU METER
+// ════════════════════════════════════════════════
+function startVU() {
+  if (!localStream) return;
+  try {
+    const c = getACtx();
+    analyser = c.createAnalyser(); analyser.fftSize=256;
+    c.createMediaStreamSource(localStream).connect(analyser);
+    const bars = document.querySelectorAll('#vu .b');
+    const buf  = new Uint8Array(analyser.frequencyBinCount);
+    document.getElementById('vu').classList.add('on');
+    vuTick = setInterval(()=>{
+      analyser.getByteFrequencyData(buf);
+      bars.forEach((b,i)=>{
+        const v=buf[Math.floor(i*buf.length/bars.length)]/255;
+        b.style.height=Math.max(4,v*24)+'px';
+      });
+    },50);
+  } catch(e){}
+}
+function stopVU() {
+  clearInterval(vuTick);
+  document.getElementById('vu').classList.remove('on');
+  document.querySelectorAll('#vu .b').forEach(b=>b.style.height='4px');
+}
+
+// ════════════════════════════════════════════════
+//  UI HELPERS
+// ════════════════════════════════════════════════
+function setStatus(msg, live) {
+  document.getElementById('stxt').textContent = msg;
+  const d = document.getElementById('sdot');
+  d.className='dot';
+  if (live && txing) d.classList.add('tx');
+  else if (live) d.classList.add('live');
+}
+
+function switchTab(t) {
+  document.getElementById('tab-c').classList.toggle('active', t==='c');
+  document.getElementById('tab-j').classList.toggle('active', t==='j');
+  document.getElementById('panel-c').style.display = t==='c'?'block':'none';
+  document.getElementById('panel-j').style.display = t==='j'?'block':'none';
+}
+
+let panelOpen=true;
+function togglePanel(){
+  panelOpen=!panelOpen;
+  document.getElementById('conn-panel').classList.toggle('closed',!panelOpen);
+  document.querySelector('.cbtn').textContent=panelOpen?'▲ HIDE PANEL':'▼ SHOW PANEL';
+}
+
+function copyCode(){
+  const txt=document.getElementById('offer-box').textContent;
+  if (!txt||txt.includes('TAP')){ toast('GENERATE A CODE FIRST'); return; }
+  navigator.clipboard.writeText(txt)
+    .then(()=>toast('CODE COPIED TO CLIPBOARD'))
+    .catch(()=>{
+      const a=document.createElement('textarea');
+      a.value=txt; document.body.appendChild(a);
+      a.select(); document.execCommand('copy'); document.body.removeChild(a);
+      toast('CODE COPIED');
+    });
+}
+
+let tT;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('on');
+  clearTimeout(tT); tT=setTimeout(()=>el.classList.remove('on'),2800);
+}
+
+// Freq sweep
+const FREQS=['462.5625','462.5875','462.6125','462.6375','462.6625','462.6875','462.7125'];
+let fi=0;
+setInterval(()=>{ if(!connected) document.getElementById('fval').textContent=FREQS[fi++%FREQS.length]; },3000);
+</script>
+</body>
+</html>
